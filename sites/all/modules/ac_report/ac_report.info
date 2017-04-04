@@ -1,0 +1,6 @@
+name = ac_report
+description = This is a helper module for Access Center Reporting
+package = Access Center
+core = 6.x
+
+

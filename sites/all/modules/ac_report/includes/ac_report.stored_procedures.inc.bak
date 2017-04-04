@@ -1,0 +1,1709 @@
+<?
+/*
+ * Created on Feb 2, 2010
+ * Created by Mark Libkuman
+ * libkuman@openflows.com
+ * www.openflows.com
+ * 
+ * Created for Manhattan Neighborhood Network
+ */
+
+function ac_report_run_stored_procedures($dbname = 'mnnstage') {
+
+  $sql = "CALL ac_import_reservation(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_item_reservation(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_bucket(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_item(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_course(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_class(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_session(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer_class(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer_session(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_trainer_class(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_trainer_session(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer_certification(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_project(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer_project_cache(); ";
+  db_query($sql);
+
+  $sql = "CALL ac_import_episode_cache(); ";
+  db_query($sql);
+
+  $sql = "CALL ac_import_airing_cache(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_affiliate_org_cache(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_producer_affiliate_org_cache(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_project_affiliate_org_cache(); ";
+  db_query($sql);
+  $sql = "CALL  ac_import_producer_group_cache(); ";
+  db_query($sql);
+  $sql = "CALL  ac_import_affiliate_org_group_cache(); ";
+  db_query($sql);
+  $sql = "CALL  ac_import_affiliate_org_tag_cache(); ";
+  db_query($sql);
+  $sql = "CALL  ac_import_affiliate_org_category_cache(); ";
+  db_query($sql);
+  $sql = "CALL  ac_import_affiliate_org_verification_cache(); ";
+  db_query($sql);
+  $sql = "CALL ac_import_project_author_cache(); ";
+  db_query($sql);
+
+
+  //this cleans up the serialized data that is impored for affiliate categories, 
+  //changes it from a category value of a space deliminated set of numbers
+  //to multiple rows, one for each category that existed in teh original value
+  //i.e. "3 4 6" becomes three separate rows, one value for each of the 3 category id's
+  ac_report_affiliate_category($dbname);
+
+}
+
+function ac_report_recreate_stored_procedures($db) {
+  ac_report_recreate_reservation_stored_procedure($db);
+  ac_report_recreate_item_reservation_stored_procedure($db);  
+  ac_report_recreate_bucket_stored_procedure($db);
+  ac_report_recreate_item_stored_procedure($db);
+  ac_report_recreate_course_stored_procedure($db);
+  ac_report_recreate_class_stored_procedure($db);
+  ac_report_recreate_session_stored_procedure($db);
+  ac_report_recreate_producer_class_stored_procedure($db);
+  ac_report_recreate_producer_session_stored_procedure($db);
+  ac_report_recreate_trainer_class_stored_procedure($db);
+  ac_report_recreate_trainer_session_stored_procedure($db);
+  ac_report_recreate_producer_certification_stored_procedure($db);
+  ac_report_recreate_producer_stored_procedure($db);
+  ac_report_recreate_project_stored_procedure($db);
+  ac_report_recreate_producer_project_stored_procedure($db);
+  ac_report_recreate_episode_stored_procedure($db);
+  ac_report_recreate_airing_stored_procedure($db);
+  ac_report_recreate_affiliate_org_stored_procedure($db);
+  ac_report_recreate_producer_affiliate_org_stored_procedure($db);
+  ac_report_recreate_project_affiliate_org_stored_procedure($db);
+  ac_report_recreate_producer_group_stored_procedure($db);
+  ac_report_recreate_affiliate_org_group_stored_procedure($db);
+  ac_report_recreate_affiliate_org_tag_stored_procedure($db);
+  ac_report_recreate_affiliate_org_category_stored_procedure($db);
+  ac_report_recreate_affiliate_org_verification_stored_procedure($db); 
+  ac_report_recreate_project_author_stored_procedure($db); 
+}
+function   ac_report_recreate_project_author_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_project_author_cache";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_project_author_cache() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_project_author_cache; ";
+  $sql .= "  INSERT INTO ac_report_project_author_cache " .
+          "  (project_id, producer_id, producer_name ) " .
+          "  SELECT n.nid, n.uid, u.name " .
+          "  FROM $db.node n " .
+          "  INNER JOIN $db.users u ON u.uid=n.uid " .
+          "  WHERE n.type='content_project'; ";
+          
+  $sql .= "END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_reservation_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_reservation";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_reservation() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_reservation_cache; ";
+  $sql .= "  INSERT INTO ac_report_reservation_cache " .
+          "  (reservation_id, producer_id, project_id,  " .
+          "   reserve_start_time, reserve_end_time, inventory_name, " .
+          "   type, deleted, affiliate_org_id, note, reserve_start_int, " .
+          "   reserve_end_int, reserve_length )" .
+          "    SELECT r.reservation_id, r.contact_id, r.project_id,  " .
+          "    r.reserve_start_time, r.reserve_end_time, " .
+          "    LOWER(REPLACE(r.inventory_name, '_', ' ')), " .
+          "    r.type, r.deleted, r.organization_id, r.note, " .
+          "    unix_timestamp(r.reserve_start_time), " .
+          "    unix_timestamp(r.reserve_end_time), " .
+          "    unix_timestamp(r.reserve_end_time) - " .
+          "    unix_timestamp(r.reserve_start_time)" .
+          "    FROM $db.reservation r " .
+          "    WHERE r.reservation_id IN " .
+          "    (SELECT br.reservation_id " .
+          "     FROM $db.bucket_reservation br " .
+          "     INNER JOIN $db.item_reservation ir " .
+          "       ON ir.bucket_reservation_id = br.bucket_reservation_id" .
+          "     WHERE ir.check_out_time IS NOT null) ".
+          "    AND r.project_id != 165046 AND r.project_id != 171445 " .
+          "    AND r.project_id != 166561 AND r.project_id != 172820 " .
+          "    AND r.deleted = 0; ";
+          
+  $sql .= "UPDATE ac_report_reservation_cache res " .
+          "INNER JOIN $db.civicrm_uf_match cum " .
+          "  on cum.contact_id = res.producer_id " .
+          "INNER JOIN $db.users u on u.uid=cum.uf_id " .
+          "SET res.producer_id=cum.uf_id; ";
+          
+  $sql .= "UPDATE ac_report_reservation_cache res " .
+          "INNER JOIN $db.node_content_project ncp " .
+          "  ON ncp.field_civiorgid_crmid = res.project_id " .
+          "SET res.project_id = ncp.field_project_id_value;";
+  $sql .= "END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_item_reservation_stored_procedure($db){  
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_item_reservation";
+  db_query($sql);
+
+  $sql = "CREATE PROCEDURE ac_import_item_reservation() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_item_reservation_cache; ";
+  $sql .= "  INSERT INTO ac_report_item_reservation_cache " .
+          "  ( item_reservation_id, bucket_reservation_id, reservation_id, " .
+          "   bucket_id, item_id, check_out_time, check_in_time, " .
+          "   check_out_time_int, check_in_time_int, check_out_duration," .
+          "   note, item_condition, affiliate_org_id) " .
+          "     SELECT ir.item_reservation_id, ir.bucket_reservation_id, " .
+          "     r.reservation_id, br.bucket_id, ir.item_id, " .
+          "     ir.check_out_time, ir.check_in_time, " .
+          "     unix_timestamp(ir.check_out_time), " .
+          "     unix_timestamp(ir.check_in_time), " .
+          "     unix_timestamp(ir.check_in_time) - " .
+          "     unix_timestamp(ir.check_out_time), " .
+          "     ir.note, ir.item_condition, r.organization_id " .
+          "     FROM $db.item_reservation ir " .
+          "     INNER JOIN $db.bucket_reservation br USING(bucket_reservation_id) " .
+          "     INNER JOIN $db.reservation r ON r.reservation_id = br.reservation_id ".
+          "     WHERE r.project_id != 165046 AND r.project_id != 171445 " .
+          "     AND r.project_id != 166561 AND r.project_id != 172820 " .
+          "     AND ir.check_out_time IS NOT null AND r.deleted = 0 and ir.item_id != 0; ";
+
+
+///////////////////////////////////////////////////////////////////////////////////
+
+  $tmp = "INSERT INTO $db.item_reservation " .
+          " (bucket_reservation_id, note) " .
+          "SELECT br.bucket_reservation_id, 'temp reporting' " .
+          "FROM $db.bucket_reservation br " .
+          "INNER JOIN $db.reservation r " .
+          "  ON r.reservation_id=br.reservation_id " .
+          "LEFT JOIN $db.item_reservation ir " .
+          "  ON ir.bucket_reservation_id=br.bucket_reservation_id " .
+          "WHERE r.reserve_start_time > curdate() " .
+          "AND ir.item_reservation_id IS NULL; ";
+  $sql .= $tmp;
+  dsm($tmp);
+
+  $tmp = "  INSERT INTO ac_report_reservation_cache " .
+          "  (reservation_id, producer_id, project_id,  " .
+          "   reserve_start_time, reserve_end_time, inventory_name, " .
+          "   type, deleted, affiliate_org_id, note, reserve_start_int, " .
+          "   reserve_end_int, reserve_length )" .
+          "    SELECT r.reservation_id, r.contact_id, r.project_id,  " .
+          "    r.reserve_start_time, r.reserve_end_time, " .
+          "    LOWER(REPLACE(r.inventory_name, '_', ' ')), " .
+          "    r.type, r.deleted, r.organization_id, r.note, " .
+          "    unix_timestamp(r.reserve_start_time), " .
+          "    unix_timestamp(r.reserve_end_time), " .
+          "    unix_timestamp(r.reserve_end_time) - " .
+          "    unix_timestamp(r.reserve_start_time)" .
+          "    FROM $db.reservation r " .
+          "    WHERE r.reservation_id IN " .
+          "    (SELECT br.reservation_id " .
+          "     FROM $db.bucket_reservation br " .
+          "     INNER JOIN $db.item_reservation ir " .
+          "       ON ir.bucket_reservation_id = br.bucket_reservation_id" .
+          "     WHERE ir.check_out_time IS null) ".
+          "    AND r.reserve_start_time > CURDATE() ".
+          "    AND r.deleted = 0; ";
+
+  $sql .= $tmp;
+  dsm($tmp);
+  
+  $tmp = "  INSERT INTO ac_report_item_reservation_cache " .
+          "  ( item_reservation_id, bucket_reservation_id, reservation_id, " .
+          "   bucket_id, item_id, check_out_time, check_in_time, " .
+          "   check_out_time_int, check_in_time_int, check_out_duration," .
+          "   note, item_condition, affiliate_org_id) " .
+          "     SELECT ir.item_reservation_id, ir.bucket_reservation_id, " .
+          "     r.reservation_id, br.bucket_id, ir.item_id, " .
+          "     ir.check_out_time, ir.check_in_time, " .
+          "     unix_timestamp(ir.check_out_time), " .
+          "     unix_timestamp(ir.check_in_time), " .
+          "     unix_timestamp(ir.check_in_time) - " .
+          "     unix_timestamp(ir.check_out_time), " .
+          "     ir.note, ir.item_condition, r.organization_id " .
+          "     FROM $db.item_reservation ir " .
+          "     INNER JOIN $db.bucket_reservation br USING(bucket_reservation_id) " .
+          "     INNER JOIN $db.reservation r ON r.reservation_id = br.reservation_id ".
+          "     WHERE r.reserve_start_time > curdate() " .
+          "     AND ir.check_out_time IS null AND r.deleted = 0 ;";
+  $sql .= $tmp;
+  dsm($tmp);
+
+  $tmp = " DELETE from $db.item_reservation where note='temp reporting'; ";
+  dsm($tmp);
+  
+  $sql .= $tmp;
+
+  $sql .= "UPDATE ac_report_reservation_cache res " .
+          "INNER JOIN $db.civicrm_uf_match cum " .
+          "  on cum.contact_id = res.producer_id " .
+          "INNER JOIN $db.users u on u.uid=cum.uf_id " .
+          "SET res.producer_id=cum.uf_id; ";
+          
+  $sql .= "UPDATE ac_report_reservation_cache res " .
+          "INNER JOIN $db.node_content_project ncp " .
+          "  ON ncp.field_civiorgid_crmid = res.project_id " .
+          "SET res.project_id = ncp.field_project_id_value;";
+///////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+          
+  $sql .= "  UPDATE ac_report_item_reservation_cache item_res " .
+          "  INNER JOIN ac_report_reservation_cache r" .
+          "    ON r.reservation_id = item_res.reservation_id " .
+          "  SET item_res.producer_id = r.producer_id; ";
+          
+  $sql .= "  UPDATE ac_report_item_reservation_cache item_res " .
+          "  INNER JOIN ac_report_reservation_cache r" .
+          "    ON r.reservation_id = item_res.reservation_id " .
+          "  SET item_res.project_id = r.project_id; ";
+ 
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_bucket_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_bucket";
+  db_query($sql);
+  $sql = "CREATE PROCEDURE ac_import_bucket() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_bucket_cache; ";
+  $sql .= "  INSERT INTO ac_report_bucket_cache" .
+          "  (bucket_id, title, created, changed, bucket_type, price) " .
+          "    SELECT n.nid, n.title, n.created, n.changed, " .
+          "    ncpb.field_grouped_node_type_value, ncpb.field_price_value " .
+          "    FROM $db.node n " .
+          "    INNER JOIN $db.node_content_product_bucket ncpb " .
+          "      ON n.vid=ncpb.vid" .
+          "    WHERE n.type = 'content_product_bucket';";
+  $sql .= "UPDATE ac_report_bucket_cache set price = 0 where price is null;";
+  $sql .= "UPDATE ac_report_bucket_cache bucket " .
+          "INNER JOIN $db.term_node tn on tn.nid=bucket.bucket_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET bucket.bucket_category = td.name " .
+          "WHERE v.name = 'Bucket Category';";
+  $sql .= "UPDATE ac_report_bucket_cache bucket " .
+          "INNER JOIN $db.term_node tn on tn.nid=bucket.bucket_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET bucket.inventory_name = td.name " .
+          "WHERE v.name = 'Inventory Name';";
+  $sql .= "UPDATE ac_report_bucket_cache bucket " .
+          "INNER JOIN $db.term_node tn on tn.nid=bucket.bucket_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET bucket.certification = td.name " .
+          "WHERE v.name = 'Certification';";
+  $sql .= "UPDATE ac_report_bucket_cache set certification = '' " .
+          "where certification is null;";
+  $sql .= "UPDATE ac_report_bucket_cache bucket " .
+          "INNER JOIN $db.term_node tn on tn.nid=bucket.bucket_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET bucket.budget_multiplier = td.name " .
+          "WHERE v.name = 'Budget Multiplier Types';";
+  $sql .= "UPDATE ac_report_bucket_cache set budget_multiplier = 'Weekday Evening Prime Time,Saturday Prime Time' " .
+          "where budget_multiplier = 'Weekday Evening Prime Time'; ";
+  $sql .= "UPDATE ac_report_bucket_cache set budget_multiplier = '' " .
+          "where budget_multiplier is null;";
+
+ 
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_item_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_item";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_item() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_item_cache; ";
+  $sql .= "  INSERT INTO ac_report_item_cache" .
+          "  (item_id, title, created, changed, item_type, bucket_id, " .
+          "   price, warranty_expiration_date, warranty_expiration_date_int, " .
+          "   serial_number, model, inventory_number, production_code, " .
+          "   in_service_date, in_service_date_int, location, location_item_id, " .
+          "    accessories, description) " .
+          "    SELECT n.nid, n.title, FROM_UNIXTIME(n.created), FROM_UNIXTIME(n.changed), " .
+          "    'equipment', field_reservation_grouping_nid, field_cost_0_value," .
+          "    field_warranty_expiration_date_value, " .
+          "    unix_timestamp(field_warranty_expiration_date_value), " .
+          "    field_serial_number_value, field_model_value, " .
+          "    field_inventory_number_value, field_production_code_value, " .
+          "    field_in_service_date_value, " .
+          "    unix_timestamp(field_in_service_date_value), " .
+          "    IFNULL(location.title, ''), field_location_nid, " .
+          "    field_accessories_value, field_description_0_value " .
+          "    FROM $db.node n " .
+          "    INNER JOIN $db.node_content_hardware_item nchi " .
+          "      ON n.vid=nchi.vid " .
+          "    LEFT JOIN $db.node location ON location.nid=field_location_nid" .
+          "    WHERE n.type = 'content_hardware_item';";
+          
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.manufacturer = td.name " .
+          "WHERE v.name = 'Manufacturer' " .
+          "AND item.item_type='equipment';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.gl_account_code = td.name " .
+          "WHERE v.name = 'GL Account Codes' " .
+          "AND item.item_type='equipment';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.equipment_category = td.name " .
+          "WHERE v.name = 'Hardware Category' " .
+          "AND item.item_type='equipment';";
+          
+  $sql .= "  INSERT INTO ac_report_item_cache" .
+          "  (item_id, title, created, changed, item_type, bucket_id, " .
+          "   facility_code, facility_name, location) " .
+          "    SELECT n.nid, n.title, FROM_UNIXTIME(n.created), FROM_UNIXTIME(n.changed), " .
+          "    'facility', field_reservation_grouping_0_nid, " .
+          "    field_facility_code_value, n.title, '' " .
+          "    FROM $db.node n " .
+          "    LEFT JOIN $db.node_content_location ncl " .
+          "      ON n.vid=ncl.vid" .
+          "    WHERE n.type = 'content_location';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.building = td.name " .
+          "WHERE v.name = 'Building' " .
+          "AND item.item_type='facility';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.item_status = td.name " .
+          "WHERE v.name = 'Item Status';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.inventory_name = td.name " .
+          "WHERE v.name = 'Inventory Name';";
+          
+  $sql .= "UPDATE ac_report_item_cache item " .
+          "INNER JOIN $db.term_node tn on tn.nid=item.item_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET item.department_name = td.name " .
+          "WHERE v.name = 'Department';";
+          
+  $sql .= 
+    "UPDATE ac_report_item_cache
+    SET department_name = 
+      CASE inventory_name 
+        WHEN 'Administration' THEN 'Administration'
+        WHEN 'Broadcast Operations' THEN 'Broadcast Operations'
+        WHEN 'Community Media' THEN 'Community Media'
+        WHEN 'Community Media Grant' THEN 'Community Media'
+        WHEN 'DCTV' THEN 'DCTV'
+        WHEN 'Education' THEN 'Training and Facilitation'
+        WHEN 'Engineering' THEN 'Engineering'
+        WHEN 'MNN Facilities' THEN 'Training and Facilitation'
+        WHEN 'None' THEN 'None'
+        WHEN 'Outreach and Visibility' THEN 'Outreach and Visibility'
+        WHEN 'Production' THEN 'Training and Facilitation'
+        WHEN 'Production DCTV' THEN 'DCTV'
+        WHEN 'Programming' THEN 'Programming'
+        WHEN 'Programming Engineering' THEN 'Engineering'
+        WHEN 'Technology' THEN 'Technology'
+        WHEN 'Youth Channel' THEN 'Youth Channel'
+      END 
+    WHERE department_name IS NULL; ";
+    
+  $sql .= "END ";
+  db_query($sql);
+}
+
+
+function ac_report_recreate_course_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_course";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_course() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_course_cache; ";
+  $sql .= "  INSERT INTO ac_report_course_cache" .
+          "  (course_id, title, created, changed, prereq_course_id) " .
+          "    SELECT n.nid, n.title, n.created, n.changed, " .
+          "    field_prerequisite_nid " .
+          "    FROM $db.node n " .
+          "    INNER JOIN $db.node_content_course ncc " .
+          "      ON n.vid=ncc.vid" .
+          "    WHERE n.type = 'content_course';";
+                 
+  $sql .= "UPDATE ac_report_course_cache course " .
+          "INNER JOIN $db.term_node tn on tn.nid=course.course_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET course.certification = td.name " .
+          "WHERE v.name = 'Certification';";
+                 
+  $sql .= "UPDATE ac_report_course_cache course " .
+          "INNER JOIN $db.term_node tn on tn.nid=course.course_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET course.course_type = td.name " .
+          "WHERE v.name = 'Course Type';";
+  
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_class_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_class";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_class() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_class_cache; ";
+  $sql .= "  INSERT INTO ac_report_class_cache" .
+          "  (class_id, title, created, changed, course_id, course_title," .
+          "   certification, course_type, " .
+          "   number_of_sessions, capacity, affiliate_org_id, " .
+          "   number_attended, student_list, affiliate_location ) " .
+          "    SELECT n.nid, n.title, FROM_UNIXTIME(n.created), FROM_UNIXTIME(n.changed), " .
+          "    field_associated_course_nid, course.title, course.certification, " .
+          "    course.course_type, field_number_of_sessions_value, " .
+          "    field_capacity_value, field_organization_object_id, " .
+          "    field_number_attended_value, field_cmptd_plain_text_students_value, field_class_location_value " .
+          "    FROM $db.node n " .
+          "    INNER JOIN $db.node_content_class ncc " .
+          "      ON n.vid=ncc.vid " .
+          "    INNER JOIN ac_report_course_cache course " .
+          "      ON course.course_id = field_associated_course_nid" .
+          "    WHERE n.type = 'content_class';";
+                 
+                               
+  $sql .= "UPDATE ac_report_class_cache class " .
+          "INNER JOIN $db.term_node tn on tn.nid=class.class_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET class.language = td.name " .
+          "WHERE v.name = 'Language';";
+          
+  $sql .= "UPDATE ac_report_class_cache class " .
+          "INNER JOIN $db.term_node tn on tn.nid=class.class_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET class.building = td.name " .
+          "WHERE v.name = 'Building';";
+                 
+  $sql .= "UPDATE ac_report_class_cache class " .
+          "INNER JOIN $db.term_node tn on tn.nid=class.class_id " .
+          "INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "SET class.department = td.name " .
+          "WHERE v.name = 'Department';";
+  
+  $sql .= "UPDATE ac_report_class_cache as class,
+          (SELECT ncs.field_class_nid as class_id, SUM(e.event_end-e.event_start) as e_sum,
+           FROM_UNIXTIME(MIN(e.event_start)) as class_start
+          FROM $db.node_content_session ncs    
+          INNER JOIN $db.event e on e.nid=ncs.nid 
+          GROUP BY ncs.field_class_nid) as class_info 
+          SET class.session_hours = class_info.e_sum,
+          class.class_start_day = class_info.class_start
+          WHERE class.class_id = class_info.class_id;";
+          
+          /**
+           UPDATE ac_report_class_cache class 
+           INNER JOIN mnn_dev10.civicrm_contact contact 
+           ON contact.id = class.affiliate_org_id 
+           SET class.affiliate_org_name = contact.display_name;  
+           
+           */
+  $sql .= "UPDATE ac_report_class_cache class " .
+          "INNER JOIN $db.civicrm_contact contact " .
+          "ON contact.id = class.affiliate_org_id " .
+          "SET class.affiliate_org_name = contact.display_name; ";  
+
+  $sql .= "END ";
+  db_query($sql);
+}
+
+
+
+function ac_report_recreate_session_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_session";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_session() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_session_cache; ";
+  $sql .= "  INSERT INTO ac_report_session_cache" .
+          "  (session_id, title, created, changed, class_id, " .
+          "   reservation_id, location_item_id, location_affiliate_org_id) " .
+          "    SELECT n.nid, n.title, n.created, n.changed, " .
+          "    field_class_nid, field_reservation_id_value, " .
+          "    field_in_house_location_nid, field_remote_location_object_id" .
+          "    FROM $db.node n " .
+          "    INNER JOIN $db.node_content_session ncs " .
+          "      ON n.vid=ncs.vid " .
+          "    INNER JOIN $db.node_data_field_reservation_id dfr" .
+          "      ON dfr.vid=n.vid " .
+          "    WHERE n.type = 'content_session';";
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_producer_class_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_producer_class";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_producer_class() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_producer_class_cache; ";
+  $sql .= "  INSERT INTO ac_report_producer_class_cache" .
+          "  (class_producer_id, class_id, producer_id, status, affiliate_org_id ) " .
+          "    SELECT cm.class_member_id, cm.class_nid, cm.uid, cm.status," .
+          "    class.field_organization_object_id " .
+          "    FROM $db.class_member cm " .
+          "    INNER JOIN $db.node_content_class class ON class.nid=cm.class_nid " .
+          "    INNER JOIN $db.users u on u.uid=cm.uid;";
+          
+  $sql .= "UPDATE ac_report_class_cache class " .
+          "INNER JOIN " .
+          "  (SELECT class_id, count(1) as number_producer_students " .
+          "   FROM ac_report_producer_class_cache " .
+          "   WHERE status = 'passed' OR status = 'failed' " .
+          "   GROUP BY class_id) as students " .
+          "ON class.class_id = students.class_id " .
+          "SET class.number_producer_students = " .
+          "  students.number_producer_students; ";
+  
+  $sql .= "UPDATE ac_report_class_cache " .
+          "SET number_producer_students = 0 " .
+          "WHERE number_producer_students is null or " .
+          "number_producer_students = ''; ";  
+         
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_producer_session_stored_procedure($db){
+ $sql = "DROP PROCEDURE IF EXISTS ac_import_producer_session";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_producer_session() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_producer_session_cache; ";
+  $sql .= "  INSERT INTO ac_report_producer_session_cache" .
+          "  (session_producer_id, session_id, producer_id, status ) " .
+          "    SELECT session_member_id, session_nid, uid, status " .
+          "    FROM $db.session_member;";
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_trainer_class_stored_procedure($db){
+  
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_trainer_class";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_trainer_class() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_trainer_class_cache; ";
+  $sql .= "  INSERT INTO ac_report_trainer_class_cache" .
+          "  (class_id, producer_id, type ) " .
+          "    SELECT n.nid, field_trainer_crmid, 'Primary' " .
+          "    FROM $db.node_data_field_trainer trainer" .
+          "    INNER JOIN $db.node n on n.vid = trainer.vid  " .
+          "    WHERE n.type='content_class' " .
+          "    AND trainer.field_trainer_crmid is not null " .
+          "    AND trainer.field_trainer_crmid != 0;";
+  
+  $sql .= "  INSERT INTO ac_report_trainer_class_cache" .
+          "  (class_id, producer_id, type ) " .
+          "    SELECT n.nid, field_second_trainer_crmid, 'Secondary' " .
+          "    FROM $db.node_data_field_second_trainer trainer" .
+          "    INNER JOIN $db.node n on n.vid = trainer.vid  " .
+          "    WHERE n.type='content_class' " .
+          "    AND trainer.field_second_trainer_crmid is not null " .
+          "    AND trainer.field_second_trainer_crmid != 0;";
+   
+  $sql .= "  UPDATE ac_report_trainer_class_cache trainer " .
+          "  INNER JOIN $db.civicrm_uf_match cum " .
+          "    on cum.contact_id=trainer.producer_id " .
+          "  SET trainer.producer_id = cum.uf_id ;";
+          
+  $sql .= "END ";
+  db_query($sql);
+  
+}
+    
+  
+                        
+function ac_report_recreate_trainer_session_stored_procedure($db){
+  
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_trainer_session";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_trainer_session() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_trainer_session_cache; ";
+  $sql .= "  INSERT INTO ac_report_trainer_session_cache" .
+          "  (session_id, producer_id, type ) " .
+          "    SELECT n.nid, field_trainer_crmid, 'Primary' " .
+          "    FROM $db.node_data_field_trainer trainer" .
+          "    INNER JOIN $db.node n on n.vid = trainer.vid  " .
+          "    WHERE n.type='content_session';";
+          
+  $sql .= "  INSERT INTO ac_report_trainer_session_cache" .
+          "  (session_id, producer_id, type ) " .
+          "    SELECT n.nid, field_second_trainer_crmid, 'Secondary' " .
+          "    FROM $db.node_data_field_second_trainer trainer" .
+          "    INNER JOIN $db.node n on n.vid = trainer.vid  " .
+          "    WHERE n.type='content_session' " .
+          "    AND trainer.field_second_trainer_crmid is not null " .
+          "    AND trainer.field_second_trainer_crmid != 0;";
+          
+  $sql .= "  UPDATE ac_report_trainer_session_cache trainer " .
+          "  INNER JOIN $db.civicrm_uf_match cum " .
+          "    on cum.contact_id=trainer.producer_id " .
+          "  SET trainer.producer_id = cum.uf_id ;";
+          
+  $sql .= "END ";
+  db_query($sql);
+  
+}
+
+function ac_report_recreate_producer_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_producer";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_producer() ";
+  $sql .= "BEGIN ";
+  $sql .= "  TRUNCATE ac_report_producer_cache; ";
+  
+  $sql .= "  INSERT INTO ac_report_producer_cache" .
+          "  (producer_id, username, email, created ) " .
+          "    SELECT uid, name, mail, created " .
+          "    FROM $db.users WHERE uid != 0;";
+          
+  $sql .= "UPDATE ac_report_producer_cache p " .
+         "INNER JOIN $db.civicrm_uf_match m " .
+         "  ON p.producer_id=m.uf_id  " .
+         "INNER JOIN $db.civicrm_contact c " .
+         "  ON c.id=m.contact_id " .
+         "SET p.display_name = c.display_name; ";
+         
+   $sql .= "UPDATE ac_report_producer_cache p " .
+           "INNER JOIN $db.civicrm_uf_match m on m.uf_id=p.producer_id " .
+           "INNER JOIN $db.civicrm_location l ON l.entity_id=m.contact_id " .
+           "INNER JOIN $db.civicrm_phone ph on ph.location_id=l.id " .
+           "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+           "SET p.phone_primary = ph.phone " .
+           "WHERE l.entity_table='civicrm_contact' " .
+           "AND  lt.name='Home' " .
+           "AND (ph.phone_type='Phone' OR ph.phone_type='Mobile'); ";
+           
+   $sql .= "UPDATE ac_report_producer_cache p " .
+           "INNER JOIN $db.civicrm_uf_match m on m.uf_id=p.producer_id " .
+           "INNER JOIN $db.civicrm_location l ON l.entity_id=m.contact_id " .
+           "INNER JOIN $db.civicrm_phone ph on ph.location_id=l.id " .
+           "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+           "SET p.phone_other = ph.phone " .
+           "WHERE l.entity_table='civicrm_contact' " .
+           "AND lt.name='Work' " .
+           "AND (ph.phone_type='Phone' OR ph.phone_type='Mobile'); ";
+           
+   $sql .= "UPDATE ac_report_producer_cache p " .
+           "INNER JOIN $db.civicrm_uf_match m on m.uf_id=p.producer_id " .
+           "INNER JOIN $db.civicrm_location l ON l.entity_id=m.contact_id " .
+           "INNER JOIN $db.civicrm_address a on a.location_id=l.id " .
+           "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+           "INNER JOIN $db.civicrm_state_province sp on sp.id=a.state_province_id " .
+           "LEFT  JOIN $db.nyc_zipcodes z on a.postal_code=z.zipcode " .
+           "SET p.street_address = a.street_address, " .
+           "p.city = a.city, p.state=sp.name, p.zip=a.postal_code, " .
+           "p.borough=z.borough " .
+           "WHERE l.entity_table='civicrm_contact' " .
+           "AND lt.name='Home';";
+
+  $sql .= " UPDATE ac_report_producer_cache p".
+            " INNER JOIN ".
+            " ( SELECT class_member.uid, COUNT(class_member.class_nid) c".
+              " FROM $db.class_member class_member ".
+              " GROUP BY class_member.uid ) sub".
+                " ON sub.uid = p.producer_id ".
+          " SET p.number_of_classes = sub.c ".
+          " ; ";
+
+   $sql .= " UPDATE ac_report_producer_cache p".
+           " INNER JOIN ".
+           " ( SELECT ncp.field_executive_producer_uid, COUNT(ep.nid) c".
+              " FROM".
+                " $db.node ep".
+                  " INNER JOIN $db.relativity r".
+                    " ON r.nid = ep.nid".
+                  " INNER JOIN $db.node_content_project ncp".
+                    " ON r.parent_nid = ncp.nid".
+              " WHERE ep.type = 'content_episode'".
+              " GROUP BY ncp.field_executive_producer_uid ) sub".
+            " ON p.producer_id = sub.field_executive_producer_uid".
+           " SET p.number_of_episodes = sub.c".
+           " ; ";
+
+   $sql .= "UPDATE ac_report_producer_cache p " .
+           "INNER JOIN " .
+           "    (SELECT producer_id, count(1) as reservation_count " .
+           "     FROM ac_report_item_reservation_cache " .
+           "     GROUP BY producer_id) as reservations " .
+           "  ON reservations.producer_id=p.producer_id " .
+           "SET p.number_of_reservations = reservations.reservation_count; ";
+    
+  $taxonomy_fields = array(
+    'verified' => 'Identity Verified',
+    'language' => 'Language',
+    'building' => 'Building',
+  );
+
+  foreach ( $taxonomy_fields as $shortname => $longname ) {
+    $sql .=
+          " UPDATE ac_report_producer_cache cache " .
+          " INNER JOIN $db.node uh_node ON uh_node.uid=cache.producer_id".
+          " INNER JOIN $db.node_content_user_history uh_content " .
+          "  ON uh_node.vid=uh_content.vid".
+          " INNER JOIN $db.term_node tn ON tn.nid = uh_node.nid " .
+          " INNER JOIN $db.term_data td ON td.tid = tn.tid " .
+          " INNER JOIN $db.vocabulary v ON v.vid = td.vid " .
+          " SET cache.$shortname = td.name ".
+          " WHERE v.name = '$longname'; ";
+          
+  }
+    
+  $sql .= "uPDATE ac_report_producer_cache cache " .
+               "INNER JOIN $db.civicrm_uf_match uf_match " .
+               "  ON uf_match.uf_id=cache.producer_id " .
+               "INNER JOIN $db.civicrm_custom_value cv " .
+               "  ON cv.entity_id=uf_match.contact_id " .
+               "INNER JOIN $db.civicrm_custom_option co " .
+               "  ON (co.value=cv.char_data AND co.entity_id=cv.custom_field_id)" .
+               "SET cache.city_council_district = co.label " .
+               "WHERE cv.custom_field_id=24; ";      
+          
+  $sql .= "UPDATE ac_report_producer_cache p ".
+          "SET p.number_of_activities = " .
+          "  (IF(p.number_of_classes,     p.number_of_classes,      0) + " .
+          "   IF(p.number_of_projects,    p.number_of_projects,     0) + " .
+          "   IF(p.number_of_episodes,    p.number_of_episodes,     0) +  " .
+          "   IF(p.number_of_reservations,p.number_of_reservations, 0)); ";
+               
+  $sql .= "  UPDATE ac_report_class_cache class " .
+          "  INNER JOIN ac_report_trainer_class_cache tc " .
+          "    on tc.class_id=class.class_id " .
+          "  INNER JOIN ac_report_producer_cache producer " .
+          "    ON producer.producer_id=tc.producer_id ".
+          "  SET class.primary_trainer_name = producer.display_name ;";
+          
+  $sql .= "END ";
+  db_query($sql);
+}
+function ac_report_recreate_producer_certification_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_producer_certification";
+  db_query($sql);
+  
+  $sql = "CREATE PROCEDURE ac_import_producer_certification() ".
+          " BEGIN ".
+          "  TRUNCATE ac_report_producer_certification_cache; ".
+          "  INSERT INTO ac_report_producer_certification_cache " .
+          "  (producer_id, certification ) " .
+          "    SELECT n.uid, td.name " .
+          "    FROM $db.node_content_user_history ncuh " .
+          "    INNER JOIN $db.node n on n.vid=ncuh.vid" .
+          "    INNER JOIN $db.term_node tn on ncuh.nid=tn.nid" .
+          "    INNER JOIN $db.term_data td on td.tid=tn.tid " .
+          "    INNER JOIN $db.vocabulary v on v.vid=td.vid " .
+          "    WHERE v.name='Certification';";
+          
+  $sql .= "END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_project_stored_procedure($db){
+  $funcname = 'ac_import_project';
+  $sql = "DROP PROCEDURE IF EXISTS $funcname";
+  db_query($sql);
+  $sql = '';
+
+  $cachetable = 'ac_report_project_cache';
+
+  $fields = array(
+    'project_id',
+    'node_id',
+    'title',
+    'narrative',
+    'created',
+    'changed',
+    'exec_producer_id',
+    'public_contact_info',
+    'public_url',
+    'public_email_value',
+    'deactivation_date',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'node_content_project.field_project_id_value',
+    'node.nid',
+    'node.title',
+    'node_content_project.field_narrative_value',
+    'FROM_UNIXTIME(node.created)',
+    'FROM_UNIXTIME(node.changed)',
+    'node_content_project.field_executive_producer_uid',
+    'node_content_project.field_public_contact_info_value',
+    'node_content_project.field_public_url_value',
+    'node_content_project.field_public_email_value',
+    'node_content_project.field_budget_expiration_date_value',
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $taxonomy_fields = array(
+    'project_status' => 'Project Status',
+    '`interval`' => 'Interval',
+    'language' => 'Language',
+    'department' => 'Department',
+    'audience' => 'Audience',
+    'content_type' => 'Content Type',
+    'format' => 'Format',
+    'topic' => 'Topic',
+    'schedule_type' => 'Schedule Type',
+    'device' => 'Device',
+    'runtime' => 'Runtime',
+  );
+
+  $updates = '';
+  foreach ( $taxonomy_fields as $shortname => $longname ) {
+    $updates .=
+          " UPDATE $cachetable cache ".
+          " INNER JOIN $db.node_content_project ".
+            " ON cache.project_id = $db.node_content_project.field_project_id_value " .
+          " INNER JOIN $db.term_node tn ON tn.nid = $db.node_content_project.nid " .
+          " INNER JOIN $db.term_data td ON td.tid = tn.tid " .
+          " INNER JOIN $db.vocabulary v ON v.vid = td.vid " .
+          " SET cache.$shortname = td.name ".
+          " WHERE v.name = '$longname'; ";
+  }
+
+    $updates .=
+      "UPDATE $cachetable cache ".
+      "INNER JOIN $db.node_content_project ".
+      "ON cache.project_id = $db.node_content_project.field_project_id_value ".
+      "INNER JOIN $db.term_node tn ON tn.nid = $db.node_content_project.nid ".
+      "INNER JOIN $db.term_data td ON td.tid = tn.tid " .
+      "INNER JOIN $db.vocabulary v ON v.vid = td.vid " .
+      "SET cache.msn = td.name ".
+      "WHERE v.name = 'Project Disclaimer'; ";
+
+   $updates .= " UPDATE $cachetable cache".
+             " INNER JOIN $db.node_content_project ncp ".
+               " ON cache.project_id = ncp.field_project_id_value ".
+             " INNER JOIN  ".
+              " ( SELECT r.parent_nid, COUNT(r.nid) c ".
+                " FROM $db.relativity r ".
+                  " INNER JOIN $db.node_content_episode ep_node ".
+                    " ON r.nid = ep_node.nid ".
+                " GROUP BY r.parent_nid ) sub ".
+               " ON sub.parent_nid = ncp.nid ".
+             " SET cache.number_of_episodes = sub.c ".
+           " ; ";
+
+   $updates .= "UPDATE $cachetable p " .
+           "INNER JOIN " .
+           "    (SELECT project_id, count(1) as reservation_count " .
+           "     FROM ac_report_item_reservation_cache " .
+           "     GROUP BY project_id) as reservations " .
+           "  ON reservations.project_id=p.project_id " .
+           "SET p.number_of_reservations = reservations.reservation_count; ";
+  
+  $updates .= 
+    "UPDATE ac_report_project_cache  ".
+    "SET number_of_activities = " .
+    "   IF(number_of_episodes,     number_of_episodes,     0) +  " .
+    "   IF(number_of_reservations, number_of_reservations, 0); ";
+      
+  
+  $updates .= 
+    "UPDATE ac_report_reservation_cache res ". 
+    "INNER JOIN ac_report_project_cache p ".
+    "  ON p.project_id = res.project_id ".
+    "SET res.project_department = p.department; ";
+
+
+  $sql = "CREATE PROCEDURE $funcname () ";
+  $sql .= "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+            " FROM $db.node INNER JOIN $db.node_content_project ".
+              " ON node.vid = node_content_project.vid; ".
+          $updates .
+          " END ";
+  db_query($sql);
+}
+function ac_report_recreate_producer_project_stored_procedure($db){
+  $funcname = 'ac_import_producer_project_cache';
+  $sql = "DROP PROCEDURE IF EXISTS $funcname";
+  db_query($sql);
+  $sql = '';
+
+  $cachetable = 'ac_report_producer_project_cache';
+
+  $fields = array(
+    'project_id',
+    'producer_id',
+    'type',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    ' node_content_project.field_project_id_value ',
+    ' node_content_project.field_executive_producer_uid',
+    " 'executive' ",
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $selectfields2 = array(
+    ' project.field_project_id_value ',
+    ' assoc_producer.field_member_0_uid' ,
+    " 'associate' ",
+  );
+  $select_from2 = implode(', ', $selectfields2);
+
+  $updates = "";
+  $updates .=
+    "UPDATE ac_report_project_cache project " .
+    "INNER JOIN (SELECT project_id, count(1) as producer_count " .
+    "            FROM ac_report_producer_project_cache " .
+    "            GROUP BY project_id) as producers " .
+    "ON producers.project_id = project.project_id ".
+    "SET project.number_of_producers = producers.producer_count; ";
+  
+   $updates .= "UPDATE ac_report_producer_cache p".
+              " INNER JOIN (SELECT producer_id, count(1) as project_count " .
+    "            FROM ac_report_producer_project_cache " .
+    "            GROUP BY producer_id) as projects " .
+    "ON projects.producer_id = p.producer_id ".
+    "SET p.number_of_projects = projects.project_count; ";
+  
+  $sql = "CREATE PROCEDURE $funcname () ";
+  $sql .= "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              " FROM $db.node_content_project " .
+              " INNER JOIN $db.node on $db.node.vid=$db.node_content_project.vid" .
+              " WHERE node_content_project.field_executive_producer_uid != 0" .
+              " AND node_content_project.field_executive_producer_uid is not null; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from2 ".
+              " FROM $db.node_content_project project".
+                " INNER JOIN $db.node_data_field_member_0 assoc_producer ".
+                  " ON project.vid = assoc_producer.vid " .
+                  "WHERE assoc_producer.field_member_0_uid is not NULL " .
+                  "AND assoc_producer.field_member_0_uid != 0; ".
+          $updates .
+          " END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_episode_stored_procedure($db){
+  $funcname = 'ac_import_episode_cache';
+  $sql = "DROP PROCEDURE IF EXISTS $funcname";
+  db_query($sql);
+  $sql = '';
+
+  $cachetable = 'ac_report_episode_cache';
+
+  $fields = array(
+    'episode_id',
+    'title',
+    'narrative',
+    'notes',
+    'associate_producer_name',
+    'special_producer_email',
+    'special_producer_website',
+    'special_producer_address',
+    'special_producer_phone',
+    'created',
+    'changed',
+    'episode_number',
+    'time_code_in',
+    'time_code_out',
+    'timing_duration',
+    'transcoded_time_code_in',
+    'transcoded_time_code_out',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'node.nid as episode_id',
+    'node.title',
+    'episode.field_episode_narrative_value',
+    'episode.field_episode_notes_value',
+    'episode.field_producer_name_value',
+    'episode.field_producer_address_value',
+    'episode.field_producer_phone_number_value',
+    'episode.field_producer_email_value',
+    'episode.field_producer_website_value',
+    'FROM_UNIXTIME(node.created)',
+    'FROM_UNIXTIME(node.changed)' ,
+    'episode.field_episode_number_value as episode_number',
+    'episode.field_timecode_in_value as time_code_in',
+    'episode.field_timecode_out_value as time_code_out',
+    'IF ((episode.field_timecode_in_value && episode.field_timecode_out_value),' .
+    '     (episode.field_timecode_out_value - episode.field_timecode_in_value),' .
+    '      0) ' .
+      'as timing_duration',
+    'episode.field_transcoded_timecode_in_value as time_code_in',
+    'episode.field_transcoded_timecode_out_value as time_code_out',
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $taxonomy_fields = array(
+    'runtime_type' => 'Runtime',
+    'language' => 'Language',
+    'audience' => 'Audience',
+    'content_type' => 'Content Type',
+    'format' => 'Format',
+    'topic' => 'Topic',
+    'schedule_type' => 'Schedule Type',
+    'live_device' => 'Device',
+    'reject_reason' => 'Reject Reason',
+    'delivered_via' => 'Delivered Via',
+  );
+  $updates = '';
+  foreach ( $taxonomy_fields as $shortname => $longname ) {
+    $updates .=
+          " UPDATE $cachetable cache ".
+          " INNER JOIN $db.term_node tn ".
+            " ON cache.episode_id = tn.nid ".
+          " INNER JOIN $db.term_data td ".
+            " ON td.tid = tn.tid ".
+          " INNER JOIN $db.vocabulary v ".
+            " ON v.vid = td.vid ".
+          " SET cache.$shortname = td.name ".
+          " WHERE v.name = '$longname' ; ";
+  }
+  $updates .= 
+      " UPDATE $cachetable as episode, ".
+        " (SELECT r.parent_nid as episode_id, ".
+                " MIN(e.event_start) as min_start, ".
+                " MAX(e.event_start) as max_start, ".
+                " COUNT(e.nid) as airing_count ".
+        " FROM $db.node_content_airing nca ".
+          " INNER JOIN $db.event e  ".
+            " ON e.nid = nca.nid  ".
+          " INNER JOIN $db.relativity r  ".
+            " ON r.nid = nca.nid ".
+        " GROUP BY r.parent_nid) as airing_info  ".
+      " SET episode.first_airing_time = FROM_UNIXTIME(airing_info.min_start), ".
+          " episode.last_airing_time = FROM_UNIXTIME(airing_info.max_start), ".
+          " episode.number_of_airings = airing_info.airing_count ".
+      " WHERE episode.episode_id = airing_info.episode_id;";
+
+  $updates .= 
+    "UPDATE $cachetable as episode " .
+    "INNER JOIN $db.relativity r ON episode.episode_id=r.nid " .
+    "INNER JOIN $db.node_content_project p on p.nid=r.parent_nid " .
+    "SET episode.project_id = p.field_project_id_value, " .
+    "    episode.exec_producer_id = p.field_executive_producer_uid," .
+    "    episode.duration = " .
+    "      CASE" .
+    "        WHEN episode.runtime_type='28 Mins' THEN 28*60 " .
+    "        WHEN episode.runtime_type='58 Mins' THEN 58*60 " .
+    "        WHEN episode.runtime_type='88 Mins' THEN 88*60 " .
+    "        WHEN episode.runtime_type='118 Mins' THEN 118*60 " .
+    "        ELSE episode.timing_duration " .
+    "        END; ";
+
+  $updates .=
+    "UPDATE $cachetable as episode " .
+    "INNER JOIN $db.node_content_episode e on e.nid=episode.episode_id ".
+    "LEFT JOIN $db.civicrm_contact in_c ON e.field_check_in_by_crmid=in_c.id  " .
+    'SET episode.notes =
+      CONCAT(
+        episode.notes,
+        IF(in_c.display_name, CONCAT("Checked In By: ", in_c.display_name, "\n"), ""),
+        IF(e.field_label_printed_on_value, CONCAT("Label Printed On Date: ", e.field_label_printed_on_value, "\n"), "")
+      ); ';
+
+  $updates .=
+    "UPDATE $cachetable as episode " .
+    "INNER JOIN $db.node_content_episode e on e.nid=episode.episode_id ".
+    "LEFT JOIN $db.civicrm_contact out_c ON e.field_check_out_by_crmid=out_c.id  " .
+    'SET episode.notes =
+      CONCAT(
+        episode.notes,
+        IF(out_c.display_name, CONCAT("Checked Out By: ", out_c.display_name, "\n"), ""),
+        IF(e.field_check_out_date_value, CONCAT("Check Out Date: ", e.field_check_out_date_value, "\n"), "")
+      ); ';
+
+  $updates .=
+    "UPDATE $cachetable as episode " .
+    "INNER JOIN $db.node_content_episode e on e.nid=episode.episode_id ".
+    "LEFT JOIN $db.civicrm_contact reject_c ON e.field_rejector_crmid=reject_c.id  " .
+    'SET episode.notes =
+      CONCAT(
+        episode.notes,
+        IF(reject_c.display_name, CONCAT("Rejected By: ", reject_c.display_name, "\n"), ""),
+        IF(e.field_rejected_on_value, CONCAT("Rejection Date: ", e.field_rejected_on_value, "\n"), "")
+      ); ';
+
+  $sql = "CREATE PROCEDURE $funcname () ";
+  $sql .= " BEGIN ".
+          "   TRUNCATE $cachetable; ".
+            " INSERT INTO $cachetable $fieldlist_parens ".
+              " SELECT $select_from ".
+              " FROM $db.node node ".
+                " INNER JOIN $db.node_content_episode episode ".
+                  " ON node.vid = episode.vid " .
+                  "WHERE node.type='content_episode'; ".
+            $updates .
+
+          " END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_airing_stored_procedure($db){
+  $funcname = 'ac_import_airing_cache';
+  $sql = "DROP PROCEDURE IF EXISTS $funcname";
+  db_query($sql);
+  $sql = '';
+
+  $cachetable = 'ac_report_airing_cache';
+
+  $fields = array(
+    'airing_id',
+    'title',
+    'created',
+    'changed',
+    'start_time',
+    'end_time',
+    'duration'
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'air_node.nid airing_id',
+    'air_node.title',
+    'FROM_UNIXTIME(air_node.created)',
+    'FROM_UNIXTIME(air_node.changed)',
+    'FROM_UNIXTIME(e.event_start)',
+    'FROM_UNIXTIME(e.event_end)',
+    'e.event_end - e.event_start'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $taxonomy_fields = array(
+    'airing_status' => 'Airing Status',
+    'airing_type' => 'Airing Type',
+    'channel' => 'Channel',
+  );
+  $updates = '';
+  foreach ( $taxonomy_fields as $shortname => $longname ) {
+    $updates .=
+          " UPDATE $cachetable cache ".
+          " INNER JOIN $db.term_node tn ".
+            " ON cache.airing_id = tn.nid ".
+          " INNER JOIN $db.term_data td ".
+            " ON td.tid = tn.tid ".
+          " INNER JOIN $db.vocabulary v ".
+            " ON v.vid = td.vid ".
+          " SET cache.$shortname = td.name ".
+          " WHERE v.name = '$longname' ; ";
+  }
+  
+  $updates .= 
+    " UPDATE $cachetable cache " .
+    " INNER JOIN $db.relativity r " .
+    "   ON r.nid = cache.airing_id " .
+    " INNER JOIN $db.node_content_episode ep " .
+    "   ON ep.nid = r.parent_nid " .
+    "SET cache.episode_id = ep.nid ;";
+
+  $updates .= 
+    " UPDATE $cachetable cache " .
+    " INNER JOIN $db.relativity r " .
+    "   ON r.nid = cache.airing_id " .
+    " INNER JOIN $db.node_content_project proj " .
+    "   ON proj.nid = r.parent_nid " .
+    "SET cache.project_id = proj.field_project_id_value;";
+
+  $updates .= 
+    " UPDATE $cachetable cache " .
+    " INNER JOIN ac_report_episode_cache ep " .
+    "   ON  ep.episode_id = cache.episode_id " .
+    "SET cache.project_id = ep.project_id " .
+    "WHERE cache.project_id is null;";
+    
+  $sql = "CREATE PROCEDURE $funcname () ";
+  $sql .= "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT DISTINCT $select_from ".
+              " FROM ".
+              " $db.node air_node ".
+                " INNER JOIN $db.event e ".
+                  " ON air_node.nid = e.nid " .
+                "where air_node.type = 'content_airing' ".
+            ";".
+            $updates .
+          " END ";
+  db_query($sql);
+}
+function ac_report_recreate_affiliate_org_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_affiliate_org_cache";
+  db_query($sql);
+  $funcname = 'ac_import_affiliate_org_cache';
+  $cachetable = 'ac_report_affiliate_org_cache';
+  
+  $fields = array(
+    'affiliate_org_id',
+    'name',
+    'website'
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'contact.id',
+    'contact.display_name',
+    'contact.home_URL'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $updates = "";
+  
+  $updates .= "UPdate $cachetable aff " .
+              "INNER JOIN $db.civicrm_location l ON l.entity_id=aff.affiliate_org_id " .
+              "INNER JOIN $db.civicrm_email e on e.location_id=l.id " .
+              "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+              "SET aff.email = e.email " .
+              "WHERE l.entity_table='civicrm_contact' " .
+              "AND (lt.name='Home' OR lt.name='Other' OR lt.name='Work'); ";
+  
+  $updates .= "UPdate $cachetable aff " .
+              "INNER JOIN $db.civicrm_location l ON l.entity_id=aff.affiliate_org_id " .
+              "INNER JOIN $db.civicrm_phone ph on ph.location_id=l.id " .
+              "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+              "SET aff.phone_primary = ph.phone " .
+              "WHERE l.entity_table='civicrm_contact' " .
+              "AND  lt.name='Home' " .
+              "AND (ph.phone_type='Phone' OR ph.phone_type='Mobile'); ";
+           
+  
+  $updates .= "upDATE $cachetable aff " .
+              "INNER JOIN $db.civicrm_location l ON l.entity_id=aff.affiliate_org_id " .
+              "INNER JOIN $db.civicrm_phone ph on ph.location_id=l.id " .
+              "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+              "SET aff.phone_other = ph.phone " .
+              "WHERE l.entity_table='civicrm_contact' " .
+              "AND  lt.name='Other' " .
+              "AND (ph.phone_type='Phone' OR ph.phone_type='Mobile'); ";
+              
+              
+  $updates .= "UpdATE $cachetable aff " .
+              "INNER JOIN $db.civicrm_location l ON l.entity_id=aff.affiliate_org_id " .
+              "INNER JOIN $db.civicrm_phone ph on ph.location_id=l.id " .
+              "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+              "SET aff.fax = ph.phone " .
+              "WHERE l.entity_table='civicrm_contact' " .
+              "AND (lt.name='Home' OR lt.name='Other') " .
+              "AND (ph.phone_type='Fax'); ";
+           
+   $updates .= "UPDatE $cachetable aff " .
+               "INNER JOIN $db.civicrm_location l ON l.entity_id=aff.affiliate_org_id " .
+               "INNER JOIN $db.civicrm_address a on a.location_id=l.id " .
+               "INNER JOIN $db.civicrm_location_type lt on lt.id=l.location_type_id " .
+               "INNER JOIN $db.civicrm_state_province sp on sp.id=a.state_province_id " .
+               "LEFT  JOIN $db.nyc_zipcodes z on a.postal_code=z.zipcode " .
+               "SET aff.street_address = a.street_address, " .
+               "aff.city = a.city, aff.state=sp.name, aff.zip=a.postal_code, " .
+               "aff.borough=z.borough " .
+               "WHERE l.entity_table='civicrm_contact' " .
+               "AND lt.name='Home';";
+  
+  $updates .= "UPDATe $cachetable aff " .
+               "INNER JOIN $db.civicrm_custom_value cv " .
+               "  ON cv.entity_id=aff.affiliate_org_id " .
+               "SET aff.creation_date = cv.date_data " .
+               "WHERE cv.custom_field_id=27; ";      
+               
+  $updates .= "uPDATE $cachetable aff " .
+               "INNER JOIN $db.civicrm_custom_value cv " .
+               "  ON cv.entity_id=aff.affiliate_org_id " .
+               "INNER JOIN $db.civicrm_custom_option co " .
+               "  ON (co.value=cv.char_data AND co.entity_id=cv.custom_field_id)" .
+               "SET aff.city_council_district = co.label " .
+               "WHERE cv.custom_field_id=24; ";      
+               
+  $updates .=
+    "UPDATE $cachetable aff " .
+    "INNER JOIN (SELECT affiliate_org_id, count(1) as res_count " .
+    "            FROM ac_report_item_reservation_cache" .
+    "            GROUP BY affiliate_org_id) as reservations " .
+    "ON reservations.affiliate_org_id = aff.affiliate_org_id ".
+    "SET aff.number_of_reservations = reservations.res_count; ";
+    
+  $updates .=
+    "UPDATE $cachetable aff " .
+    "INNER JOIN (SELECT affiliate_org_id, count(1) as class_count " .
+    "            FROM ac_report_producer_class_cache" .
+    "            GROUP BY affiliate_org_id) as classes " .
+    "ON classes.affiliate_org_id = aff.affiliate_org_id ".
+    "SET aff.number_of_classes = classes.class_count; ";
+      
+  $sql = ''; $sql = "CREATE PROCEDURE $funcname () ";
+  $sql .= "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM ".
+              "$db.civicrm_contact contact ".
+              "INNER JOIN $db.civicrm_group_contact cg " .
+              "  ON cg.contact_id = contact.id " .
+              "WHERE contact.contact_type = 'organization' " .
+              "AND cg.group_id=226; ".
+            $updates .
+          " END ";
+  db_query($sql);
+}
+function ac_report_recreate_producer_affiliate_org_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_producer_affiliate_org_cache";
+  db_query($sql);
+  $funcname = 'ac_import_producer_affiliate_org_cache';
+  $cachetable = 'ac_report_producer_affiliate_org_cache';
+  
+  $fields = array(
+    'affiliate_org_id',
+    'producer_id',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'contact_b.id',
+    'uf_match.uf_id'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $updates = "";
+  $updates .=
+    "UPDATE ac_report_affiliate_org_cache aff " .
+    "INNER JOIN (SELECT affiliate_org_id, count(1) as producer_count " .
+    "            FROM ac_report_producer_affiliate_org_cache" .
+    "            GROUP BY affiliate_org_id) as producers " .
+    "ON producers.affiliate_org_id = aff.affiliate_org_id ".
+    "SET aff.number_of_producers = producers.producer_count; ";
+  
+   $updates .=
+    "UPDATE ac_report_producer_cache prod " .
+    "INNER JOIN (SELECT producer_id, count(1) as affiliate_count " .
+    "            FROM ac_report_producer_affiliate_org_cache" .
+    "            GROUP BY producer_id) as affiliates " .
+    "ON affiliates.producer_id = prod.producer_id ".
+    "SET prod.number_of_affiliates = affiliates.affiliate_count; ";
+
+  $sql = ''; 
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_relationship rel ".
+              "INNER JOIN $db.civicrm_contact contact_a on contact_a.id=rel.contact_id_a " .
+              "INNER JOIN $db.civicrm_contact contact_b on contact_b.id=rel.contact_id_b " .
+              "INNER JOIN $db.civicrm_uf_match uf_match on uf_match.contact_id=contact_a.id ".
+              "WHERE rel.relationship_type_id = 10 " .
+              "AND contact_a.contact_type='Individual' " .
+              "AND contact_b.contact_type='Organization' " .
+              "AND rel.is_active=1; ".
+            $updates .
+          " END ";
+  db_query($sql);
+}
+
+
+function ac_report_recreate_project_affiliate_org_stored_procedure($db){
+  $sql = "DROP PROCEDURE IF EXISTS ac_import_project_affiliate_org_cache";
+  db_query($sql);
+  $funcname = 'ac_import_project_affiliate_org_cache';
+  $cachetable = 'ac_report_project_affiliate_org_cache';
+  
+  $fields = array(
+    'affiliate_org_id',
+    'project_id',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'contact_a.id',
+    'p.field_project_id_value'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $updates = "";
+  $updates .=
+    "UPDATE ac_report_affiliate_org_cache aff " .
+    "INNER JOIN (SELECT affiliate_org_id, count(1) as proj_count " .
+    "            FROM ac_report_project_affiliate_org_cache" .
+    "            GROUP BY affiliate_org_id) as projects " .
+    "ON projects.affiliate_org_id = aff.affiliate_org_id ".
+    "SET aff.number_of_projects = projects.proj_count; ";
+    
+    
+  $updates .=
+    "UPDATE ac_report_affiliate_org_cache aff " .
+    "INNER JOIN ac_report_project_affiliate_org_cache proj_aff " .
+    "  ON proj_aff.affiliate_org_id = aff.affiliate_org_id ".
+    "INNER JOIN (SELECT project_id, count(1) as episode_count " .
+    "            FROM ac_report_episode_cache ep " .
+    "            GROUP BY project_id) as episodes " .
+    "ON episodes.project_id = proj_aff.project_id ".
+    "SET aff.number_of_episodes = episodes.episode_count; ";
+    
+   $updates .=
+    "UPDATE ac_report_project_cache proj " .
+    "INNER JOIN (SELECT project_id, count(1) as affiliate_count " .
+    "            FROM ac_report_project_affiliate_org_cache" .
+    "            GROUP BY project_id) as affiliates " .
+    "ON affiliates.project_id = proj.project_id ".
+    "SET proj.number_of_affiliates = affiliates.affiliate_count; ";
+    
+  $updates .=
+    "UPDATE ac_report_affiliate_org_cache  " .
+    "SET number_of_activities = " .
+    "  (IF(number_of_classes,      number_of_classes,      0) + " .
+    "   IF(number_of_projects,     number_of_projects,     0) + " .
+    "   IF(number_of_episodes,     number_of_episodes,     0) +  " .
+    "   IF(number_of_reservations, number_of_reservations, 0)); ";
+  
+  $sql = ''; 
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_relationship rel ".
+              "INNER JOIN $db.civicrm_contact contact_a on contact_a.id=rel.contact_id_a " .
+              "INNER JOIN $db.civicrm_contact contact_b on contact_b.id=rel.contact_id_b " .
+              "INNER JOIN $db.node_content_project p on p.field_civiorgid_crmid=contact_b.id ".
+              "WHERE rel.relationship_type_id = 9 " .
+              "AND contact_a.contact_type='Organization' " .
+              "AND contact_b.contact_type='Organization' " .
+              "AND rel.is_active=1; ".
+            $updates .
+          " END ";
+          
+  db_query($sql);
+}
+
+function ac_report_recreate_producer_group_stored_procedure($db) {
+  $funcname = "ac_import_producer_group_cache";
+  $cachetable = 'ac_report_producer_group_cache';
+  
+  $sql = "DROP PROCEDURE IF EXISTS $funcname; ";
+  db_query($sql);
+  
+  $fields = array(
+    'producer_id',
+    'group_name',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'uf_match.uf_id',
+    'g.name'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_group_contact gc ".
+              "INNER JOIN $db.civicrm_group g on g.id=gc.group_id " .
+              "INNER JOIN $db.civicrm_contact contact on contact.id=gc.contact_id " .
+              "INNER JOIN $db.civicrm_uf_match uf_match on uf_match.contact_id=contact.id " .
+              "WHERE contact.contact_type='Individual' " .
+              "AND gc.status='Added'; ".
+          " END ";
+  db_query($sql);
+} 
+
+function ac_report_recreate_affiliate_org_group_stored_procedure($db) {
+  $funcname = "ac_import_affiliate_org_group_cache"; 
+  $cachetable = 'ac_report_affiliate_org_group_cache';
+  
+  $sql = "DROP PROCEDURE IF EXISTS $funcname; ";
+  db_query($sql);
+  
+  $fields = array(
+    'affiliate_org_id',
+    'group_name',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'contact_id',
+    'g.name'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_group_contact gc ".
+              "INNER JOIN $db.civicrm_group g on g.id=gc.group_id " .
+              "INNER JOIN ac_report_affiliate_org_cache aff on aff.affiliate_org_id=gc.contact_id " .
+              "INNER JOIN $db.civicrm_contact contact on contact.id=gc.contact_id " .
+              "WHERE contact.contact_type='Organization' " .
+              "AND gc.status='Added' " .
+              "AND g.name != 'Affiliates' ; ".
+          " END ";
+  db_query($sql);
+}
+
+function ac_report_recreate_affiliate_org_tag_stored_procedure($db) {
+  $funcname = "ac_import_affiliate_org_tag_cache";
+  $cachetable = 'ac_report_affiliate_org_tag_cache';
+  
+  $sql = "DROP PROCEDURE IF EXISTS $funcname; ";
+  db_query($sql);
+  
+  $fields = array(
+    'affiliate_org_id',
+    'tag',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'et.entity_id',
+    't.name'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_entity_tag et ".
+              "INNER JOIN $db.civicrm_tag t on t.id=et.tag_id " .
+              "INNER JOIN ac_report_affiliate_org_cache aff on aff.affiliate_org_id=et.entity_id ; ".
+          "END ";
+  db_query($sql);
+}
+  
+function ac_report_recreate_affiliate_org_category_stored_procedure($db) {
+  $funcname = "ac_import_affiliate_org_category_cache";
+  $cachetable = "ac_report_affiliate_org_category_cache";
+    $sql = "DROP PROCEDURE IF EXISTS $funcname; ";
+  db_query($sql);
+
+  $fields = array(
+    'affiliate_org_id',
+    'category',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'aff.affiliate_org_id',
+    'cv.char_data'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_custom_value cv " .
+              "INNER JOIN ac_report_affiliate_org_cache aff ".
+               "  ON cv.entity_id=aff.affiliate_org_id " .
+               "WHERE cv.custom_field_id=30 AND cv.char_data != ''; " .      
+          " END ";
+  db_query($sql);
+}
+
+  
+function ac_report_recreate_affiliate_org_verification_stored_procedure($db) {
+  $funcname = "ac_import_affiliate_org_verification_cache";
+  $cachetable = "ac_report_affiliate_org_verification_cache";
+    $sql = "DROP PROCEDURE IF EXISTS $funcname; ";
+  db_query($sql);
+
+  $fields = array(
+    'affiliate_org_id',
+    'verification',
+  );
+  $fieldlist_parens = "( ". implode(', ', $fields) ." )";
+
+  $selectfields = array(
+    'aff.affiliate_org_id',
+    'cv.char_data'
+  );
+  $select_from = implode(', ', $selectfields);
+
+  $sql = "CREATE PROCEDURE $funcname () " .
+         "BEGIN ".
+          " TRUNCATE $cachetable; ".
+          " INSERT INTO $cachetable $fieldlist_parens ".
+            " SELECT $select_from ".
+              "FROM $db.civicrm_custom_value cv " .
+              "INNER JOIN ac_report_affiliate_org_cache aff ".
+               "  ON cv.entity_id=aff.affiliate_org_id " .
+               "WHERE cv.custom_field_id=29 " .
+               "AND cv.char_data != ''; " .      
+          " END ";
+  db_query($sql);
+}

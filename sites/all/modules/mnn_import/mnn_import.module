@@ -1,0 +1,128 @@
+<?php
+/**
+ * @file
+ * This is an example outlining how a module can be used to display a
+ * custom page at a given URL.
+ */
+
+
+/**
+ * Implementation of hook_menu().
+ *
+ */
+function mnn_import_menu() {
+  // This is the minimum information you can provide for a menu item. This menu
+  // item will be created in the default menu.
+  $items['admin/reports/mm-import'] = array(
+    'title' => 'MNN Import Overview',
+    'page callback' => 'mnn_import_overview',
+    'access callback' => TRUE,
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function mnn_import_overview() {
+  
+  $output = '<b>Current D4.7 Stats:</b>';
+  
+  $count = 0;
+  
+  $type = 'cm_project';
+  $result = db_query('SELECT COUNT(project_id) AS COUNT FROM {ac_report_project_cache}');
+  $count = db_fetch_object($result);
+  $output .= '<p>Projects: ' . $count->COUNT . '</p>';
+
+  $count = 0;
+  $result = db_query("SELECT DISTINCT(exec_producer_id) FROM {ac_report_project_cache}");
+  while ($city = db_fetch_object($result)) {
+    $count++;
+  }
+
+  $output .= ' - Number of Exec Producers: ' . $count . '<br />';
+  
+  $count = 0;
+  $result = db_query("SELECT DISTINCT(language) FROM {ac_report_project_cache}");
+  $output .= ' - Languages: ';
+  while ($language = db_fetch_object($result)) {
+    $count++;
+    $output .= $language->language . ', ';
+  }
+
+  $output .= '<br />  - Number of Unique Languages: ' . $count;
+ 
+  $type = 'cm_show';
+  $result = db_query('SELECT COUNT(episode_id) AS COUNT FROM {ac_report_episode_cache}');
+  $count = db_fetch_object($result);
+  $output .= '<p>Shows: ' . $count->COUNT . '</p>';
+  
+  $type = 'cm_airing';
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache}');
+  $count = db_fetch_object($result);
+  $output .= '<p>Airings: ' . $count->COUNT . '</p>';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE channel = "Channel 1"'); 
+  $count = db_fetch_object($result);
+  $output .= '- Channel 1: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE channel = "Channel 2"');
+  $count = db_fetch_object($result);
+  $output .= '- Channel 2: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE channel = "Channel 3"');
+  $count = db_fetch_object($result);
+  $output .= '- Channel 3: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE channel = "Channel 4"');
+  $count = db_fetch_object($result);
+  $output .= '- Channel 4: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE airing_type = "Fill"');
+  $count = db_fetch_object($result);
+  $output .= '- Fill: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE airing_type = "Series"');
+  $count = db_fetch_object($result);
+  $output .= '- Series: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE airing_type = "Series Makeup"');
+  $count = db_fetch_object($result);
+  $output .= '- Series Makeup: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE airing_type = "Special"');
+  $count = db_fetch_object($result);
+  $output .= '- Special: ' . $count->COUNT . '<br />';
+
+  $result = db_query('SELECT COUNT(airing_id) AS COUNT FROM {ac_report_airing_cache} WHERE airing_type = "Promo"');
+  $count = db_fetch_object($result);
+  $output .= '- Promo: ' . $count->COUNT . '<br />';
+
+  $result = db_query("SELECT COUNT(affiliate_org_id) AS COUNT FROM {ac_report_affiliate_org_cache}");
+  $count = db_fetch_object($result);
+  $output .= '<p>Affiliate Org: ' . $count->COUNT . '</p>';
+  
+  $count = 0;
+  $result = db_query("SELECT DISTINCT(city) FROM {ac_report_affiliate_org_cache} ORDER BY city ASC");
+  $output .= 'Cities: ';
+  while ($city = db_fetch_object($result)) {
+    $count++;
+    $output .= $city->city . ', ';
+  }
+
+  $output .= '<p>Number of Unique Cities: ' . $count . '</p>';
+
+  $result = db_query("SELECT COUNT(producer_id) AS COUNT FROM {ac_report_producer_cache}");
+  $count = db_fetch_object($result);
+  $output .= '<p>Users (Producers): ' . $count->COUNT . '</p>';
+  
+  $count = 0;
+  $result = db_query("SELECT DISTINCT(city) FROM {ac_report_producer_cache} ORDER BY city ASC");
+  $output .= 'Cities: ';
+  while ($city = db_fetch_object($result)) {
+    $count++;
+    $output .= $city->city . ', ';
+  }
+  $output .= '<p>Number of Unique Cities: ' . $count . '</p>';
+  return $output;
+}

@@ -1,0 +1,5 @@
+name = MNN Import Overview
+description = Queries to compare node counts between D4.7 and D7
+package = MNN Custom
+core = 6.x
+

@@ -1,0 +1,6 @@
+name = "MNN Show - Service Endpoints"
+description = "Provides urls for getting show info and schedule. Used by the MNN Show module on Mnn.org"
+dependencies[] = ctools
+version = "6.x-1.0"
+core = "6.x"
+package = "MNN"

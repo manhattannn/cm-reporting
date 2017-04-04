@@ -1,0 +1,4 @@
+
+AuthType Basic
+AuthName "Site under Maintenance, come back soon"
+AuthUserFile /etc/apache2/.htpasswd
