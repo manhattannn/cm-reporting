@@ -8,7 +8,7 @@
  * Created for Manhattan Neighborhood Network
  */
 
-function ac_report_run_stored_procedures($dbname = 'cm_drupal') {
+function ac_report_run_stored_procedures($dbname = 'cm_drupal_new') {
 
   $stored_procedure_calls = 
     array(

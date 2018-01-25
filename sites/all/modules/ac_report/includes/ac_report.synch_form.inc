@@ -10,7 +10,7 @@
 function ac_report_civi_db($db) {
   $db_array = array(
 		    'cmtestingdrupal'=>'cmtestingcivi',
-		    'cm_drupal'=> 'cm_civicrm',
+		    'cm_drupal'=> 'cm_civicrm_new',
 		    );
 
   return $db_array[$db];
@@ -38,7 +38,7 @@ function ac_report_synch_form() {
     '#description' => t('Enter name of source db in format: ').
       '<i>database_name@host</i> '.t('Note, if you change the source db ' .
           'you will need to recreate the stored procedures.'),
-    '#default_value' => 'cm_drupal@localhost',
+    '#default_value' => 'cm_drupal_new@192.168.209.123',
   );
   
   $options = array(
@@ -76,14 +76,14 @@ function ac_report_synch_form() {
 
 function ac_report_synch_form_validate($form, &$form_state) {
   $source_db = $form_state['values']['box']['source_db'];
-  if (!strpos($source_db, '@localhost')) {
+  if (!strpos($source_db, '@192.168.209.123')) {
     form_error($form['box']['source_db'], t('At this time the Source Database' .
-        ' can only be localhost.'));  
+        ' can only be 192.168.209.123.'));  
     return;  
   }
   else {
-    $host = 'localhost';
-    $db = substr($source_db, 0, strpos($source_db, '@localhost'));
+    $host = '192.168.209.123';
+    $db = substr($source_db, 0, strpos($source_db, '@192.168.209.123'));
   }
   if (!ac_report_is_readable_database($db)) {
     form_error($form['box']['source_db'], $db . t(' does not exist or is not ' .
@@ -95,12 +95,12 @@ function ac_report_synch_form_validate($form, &$form_state) {
 
 function ac_report_synch_form_submit($form, &$form_state) {
   $source_db = $form_state['values']['box']['source_db'];
-  if (!strpos($source_db, '@localhost')) {
+  if (!strpos($source_db, '@192.168.209.123')) {
     //FIXME find way to query remote Databases
   }
   else {
-    $host = 'localhost';
-    $db = substr($source_db, 0, strpos($source_db, '@localhost'));
+    $host = '192.168.209.123';
+    $db = substr($source_db, 0, strpos($source_db, '@192.168.209.123'));
   }
   $cache_table_action = $form_state['values']['box']['cache_tables'];
   
