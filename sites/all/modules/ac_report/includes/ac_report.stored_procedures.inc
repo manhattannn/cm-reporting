@@ -370,8 +370,13 @@ function ac_report_recreate_item_stored_procedure($db){
 		  'item_status',
 		  'inventory_name',
 		  'department_name',
+		  'in_service_date',
+		  'in_service_date_int',
+		  'created',
+		  'changed',
+		  'warranty_expiration_date',
+		  'warranty_expiration_date_int',
 		  );
- 
   $fieldlist_parens = "( ". implode(', ', $fields) ." )";
   
   $sql .= "
@@ -389,7 +394,11 @@ function ac_report_recreate_item_stored_procedure($db){
     nt.type, field_facility_code_value, field_serial_number_value, 
     field_inventory_number_value, field_associated_facility_nid,
     field_associated_facility_nid, field_equipment_item_status_tid,
-    field_reservations_inventory_tid, field_department_tid   
+    field_reservations_inventory_tid, field_department_tid, 
+    field_in_service_ate_value, 
+    unix_timestamp(field_in_service_ate_value), from_unixtime(created),
+    from_unixtime(changed), field_warrenty_expiration_date_value,
+    unix_timestamp(field_warrenty_expiration_date_value)   
 
     FROM $db.node i 
     LEFT JOIN $db.field_data_field_serial_number sn on sn.revision_id=i.vid 
@@ -410,6 +419,10 @@ function ac_report_recreate_item_stored_procedure($db){
     LEFT JOIN $db.field_data_field_department dept on dept.revision_id=i.vid
     LEFT JOIN $db.field_data_field_reservations_inventory inv_name
       on inv_name.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_warrenty_expiration_date exp 
+      on exp.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_in_service_ate serv
+      ON serv.revision_id=i.vid
     WHERE rin.reservations_sub_type !=2
     AND (rrn.nid is NULL OR rrn.reservations_sub_type !=2)
     AND (rbn.nid is NULL OR rbn.reservations_sub_type !=2)
@@ -424,7 +437,11 @@ function ac_report_recreate_item_stored_procedure($db){
     SELECT i.nid, i.title, i.title, 'facility', 'facility_non_reservable_',
     field_facility_code_value, '', '', field_associated_facility_nid,
     field_associated_facility_nid, field_equipment_item_status_tid,
-    field_reservations_inventory_tid, field_department_tid   
+    field_reservations_inventory_tid, field_department_tid, 
+    field_in_service_ate_value, 
+    unix_timestamp(field_in_service_ate_value), from_unixtime(created),
+    from_unixtime(changed), field_warrenty_expiration_date_value,
+    unix_timestamp(field_warrenty_expiration_date_value)   
 
     FROM $db.node i 
     LEFT JOIN $db.field_data_field_facility_code fc on fc.revision_id=i.vid
@@ -435,6 +452,10 @@ function ac_report_recreate_item_stored_procedure($db){
     LEFT JOIN $db.field_data_field_department dept on dept.revision_id=i.vid
     LEFT JOIN $db.field_data_field_reservations_inventory inv_name
       on inv_name.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_warrenty_expiration_date exp 
+      on exp.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_in_service_ate serv
+      ON serv.revision_id=i.vid
     WHERE i.type = 'facility_non_reservable_'
     GROUP BY i.nid, i.title
   ;";
@@ -445,8 +466,10 @@ function ac_report_recreate_item_stored_procedure($db){
     '', field_serial_number_value, field_inventory_number_value, 
     field_associated_facility_nid, field_associated_facility_nid, 
     field_equipment_item_status_tid, field_reservations_inventory_tid, 
-    field_department_tid   
-
+    field_department_tid, field_in_service_ate_value, 
+    unix_timestamp(field_in_service_ate_value), from_unixtime(created),
+    from_unixtime(changed), field_warrenty_expiration_date_value,
+    unix_timestamp(field_warrenty_expiration_date_value)
     FROM $db.node i 
     INNER JOIN $db.field_data_field_serial_number sn on sn.revision_id=i.vid 
     LEFT JOIN $db.field_data_field_inventory_number in_num 
@@ -458,6 +481,10 @@ function ac_report_recreate_item_stored_procedure($db){
     LEFT JOIN $db.field_data_field_department dept on dept.revision_id=i.vid
     LEFT JOIN $db.field_data_field_reservations_inventory inv_name
       on inv_name.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_warrenty_expiration_date exp 
+      on exp.revision_id=i.vid
+    LEFT JOIN $db.field_data_field_in_service_ate serv
+      ON serv.revision_id=i.vid
     WHERE i.type = 'equipment_non_reservable_'
     GROUP BY i.nid, i.title
   ;";

@@ -10,7 +10,7 @@
 function ac_report_civi_db($db) {
   $db_array = array(
 		    'cmtestingdrupal'=>'cmtestingcivi',
-		    'cm_drupal'=> 'cm_civicrm_new',
+		    'cm_drupal_new'=> 'cm_civi_new',
 		    );
 
   return $db_array[$db];
