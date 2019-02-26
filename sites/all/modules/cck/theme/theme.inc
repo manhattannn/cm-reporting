@@ -1,5 +1,4 @@
 <?php
-// $Id: theme.inc,v 1.1.2.13 2009/04/28 23:06:37 yched Exp $
 
 /**
  * @file
@@ -128,6 +127,7 @@ function template_preprocess_content_display_overview_form(&$vars) {
     $element = &$form[$key];
     $row = new stdClass();
     foreach (element_children($element) as $child) {
+      if (empty($row->{$child})) $row->{$child} = new stdClass();
       if (!array_key_exists('exclude', $element[$child])) {
         $row->{$child} = drupal_render($element[$child]);
       }

@@ -364,7 +364,14 @@ function drupal_unset_globals() {
  *  TRUE if only containing valid characters, or FALSE otherwise.
  */
 function drupal_valid_http_host($host) {
-  return preg_match('/^\[?(?:[a-z0-9-:\]_]+\.?)+$/', $host);
+  // Limit the length of the host name to 1000 bytes to prevent DoS attacks with
+  // long host names.
+  return strlen($host) <= 1000
+    // Limit the number of subdomains and port separators to prevent DoS attacks
+    // in conf_path().
+    && substr_count($host, '.') <= 100
+    && substr_count($host, ':') <= 100
+    && preg_match('/^\[?(?:[a-zA-Z0-9-:\]_]+\.?)+$/', $host);
 }
 
 /**
@@ -660,7 +667,7 @@ function page_get_cache($status_only = FALSE) {
   }
   $cache = NULL;
 
-  if (!$user->uid && $_SERVER['REQUEST_METHOD'] == 'GET' && count(drupal_set_message()) == 0 && $_SERVER['SERVER_SOFTWARE'] !== 'PHP CLI') {
+  if (!$user->uid && $_SERVER['REQUEST_METHOD'] == 'GET' && !drupal_set_message() && $_SERVER['SERVER_SOFTWARE'] !== 'PHP CLI') {
     $cache = cache_get($base_root . request_uri(), 'cache_page');
 
     if (empty($cache)) {
@@ -931,6 +938,8 @@ function request_uri() {
  * @param $type
  *   The category to which this message belongs. Can be any string, but the
  *   general practice is to use the name of the module calling watchdog().
+ *   The $type parameter is limited to 16 characters; anything longer is
+ *   truncated.
  * @param $message
  *   The message to store in the log. See t() for documentation
  *   on how $message and $variables interact. Keep $message
@@ -940,8 +949,16 @@ function request_uri() {
  *   NULL if message is already translated or not possible to
  *   translate.
  * @param $severity
- *   The severity of the message, as per RFC 3164. Possible values are
- *   WATCHDOG_ERROR, WATCHDOG_WARNING, etc.
+ *   The severity of the message; one of the following values as defined in
+ *   @link http://www.faqs.org/rfcs/rfc3164.html RFC 3164: @endlink
+ *   - WATCHDOG_EMERGENCY: Emergency, system is unusable.
+ *   - WATCHDOG_ALERT: Alert, action must be taken immediately.
+ *   - WATCHDOG_CRITICAL: Critical conditions.
+ *   - WATCHDOG_ERROR: Error conditions.
+ *   - WATCHDOG_WARNING: Warning conditions.
+ *   - WATCHDOG_NOTICE: (default) Normal but significant conditions.
+ *   - WATCHDOG_INFO: Informational messages.
+ *   - WATCHDOG_DEBUG: Debug-level messages.
  * @param $link
  *   A link to associate with the message.
  *
@@ -1121,6 +1138,18 @@ function _drupal_bootstrap($phase) {
 
     case DRUPAL_BOOTSTRAP_CONFIGURATION:
       drupal_unset_globals();
+      // PHP's built-in phar:// stream wrapper is not sufficiently secure. Override
+      // it with a more secure one, which requires PHP 5.3.3. For lower versions,
+      // unregister the built-in one without replacing it. Sites needing phar
+      // support for lower PHP versions must implement hook_stream_wrappers() to
+      // register their desired implementation.
+      if (in_array('phar', stream_get_wrappers(), TRUE)) {
+        stream_wrapper_unregister('phar');
+        if (version_compare(PHP_VERSION, '5.3.3', '>=')) {
+          include_once './includes/file.phar.inc';
+          file_register_phar_wrapper();
+        }
+      }
       // Start a page timer:
       timer_start('page');
       // Initialize the configuration
@@ -1169,6 +1198,37 @@ function _drupal_bootstrap($phase) {
     case DRUPAL_BOOTSTRAP_LATE_PAGE_CACHE:
       // Initialize configuration variables, using values from settings.php if available.
       $conf = variable_init(isset($conf) ? $conf : array());
+
+      // Sanitize the destination parameter (which is often used for redirects)
+      // to prevent open redirect attacks leading to other domains. Sanitize
+      // both $_GET['destination'] and $_REQUEST['destination'] to protect code
+      // that relies on either, but do not sanitize $_POST to avoid interfering
+      // with unrelated form submissions. $_REQUEST['edit']['destination'] is
+      // also sanitized since drupal_goto() will sometimes rely on it, and
+      // other code might therefore use it too. The sanitization happens here
+      // because menu_path_is_external() requires the variable system to be
+      // available.
+      if (isset($_GET['destination']) || isset($_REQUEST['destination']) || isset($_REQUEST['edit']['destination'])) {
+        // If the destination is an external URL, remove it.
+        if (isset($_GET['destination']) && menu_path_is_external($_GET['destination'])) {
+          unset($_GET['destination']);
+          unset($_REQUEST['destination']);
+        }
+        // Ensure that the destination's query parameters are not dangerous.
+        if (isset($_GET['destination'])) {
+          _drupal_bootstrap_clean_destination();
+        }
+        // If there's still something in $_REQUEST['destination'] that didn't
+        // come from $_GET, check it too.
+        if (isset($_REQUEST['destination']) && (!isset($_GET['destination']) || $_REQUEST['destination'] != $_GET['destination']) && menu_path_is_external($_REQUEST['destination'])) {
+          unset($_REQUEST['destination']);
+        }
+        // Check $_REQUEST['edit']['destination'] separately.
+        if (isset($_REQUEST['edit']['destination']) && menu_path_is_external($_REQUEST['edit']['destination'])) {
+          unset($_REQUEST['edit']['destination']);
+        }
+      }
+
       $cache_mode = variable_get('cache', CACHE_DISABLED);
       // Get the page from the cache.
       $cache = $cache_mode == CACHE_DISABLED ? '' : page_get_cache();
@@ -1445,6 +1505,123 @@ function drupal_random_bytes($count) {
 }
 
 /**
+ * Calculates a hexadecimal encoded sha-1 hmac.
+ *
+ * @param string $data
+ *   String to be validated with the hmac.
+ * @param string $key
+ *   A secret string key.
+ *
+ * See RFC2104 (http://www.ietf.org/rfc/rfc2104.txt). Note, the result of this
+ * must be identical to using hash_hmac('sha1', $data, $key);  We don't use
+ * that function since PHP can be missing it if it was compiled with the
+ * --disable-hash switch.
+ *
+ * @return string
+ *   A hexadecimal encoded sha-1 hmac.
+ */
+function drupal_hash_hmac_sha1($data, $key) {
+  // Keys longer than the 64 byte block size must be hashed first.
+  if (strlen($key) > 64) {
+    $key = pack("H*", sha1($key));
+  }
+  return sha1((str_pad($key, 64, chr(0x00)) ^ (str_repeat(chr(0x5c), 64))) . pack("H*", sha1((str_pad($key, 64, chr(0x00)) ^ (str_repeat(chr(0x36), 64))) . $data)));
+}
+
+/**
+ * Calculates a base-64 encoded, URL-safe sha-1 hmac.
+ *
+ * @param string $data
+ *   String to be validated with the hmac.
+ * @param string $key
+ *   A secret string key.
+ *
+ * @return string
+ *   A base-64 encoded sha-1 hmac, with + replaced with -, / with _ and
+ *   any = padding characters removed.
+ */
+function drupal_hmac_base64($data, $key) {
+  // Casting $data and $key to strings here is necessary to avoid empty string
+  // results of the hash function if they are not scalar values. As this
+  // function is used in security-critical contexts like token validation it is
+  // important that it never returns an empty string.
+  $hmac = base64_encode(pack("H*", drupal_hash_hmac_sha1((string) $data, (string) $key)));
+  // Modify the hmac so it's safe to use in URLs.
+  return strtr($hmac, array('+' => '-', '/' => '_', '=' => ''));
+}
+
+/**
+ * Returns TRUE if a path is external (e.g. http://example.com).
+ *
+ * May be used early in bootstrap.
+ */
+function menu_path_is_external($path) {
+  // Avoid calling filter_xss_bad_protocol() if there is any slash (/),
+  // hash (#) or question_mark (?) before the colon (:) occurrence - if any - as
+  // this would clearly mean it is not a URL. If the path starts with 2 slashes
+  // then it is always considered an external URL without an explicit protocol
+  // part. Leading control characters may be ignored or mishandled by browsers,
+  // so assume such a path may lead to an external location. The range matches
+  // all UTF-8 control characters, class Cc.
+  $colonpos = strpos($path, ':');
+  // Some browsers treat \ as / so normalize to forward slashes.
+  $path = str_replace('\\', '/', $path);
+  return (strpos($path, '//') === 0) || (preg_match('/^[\x00-\x1F\x7F-\x9F]/u', $path) !== 0)
+  || ($colonpos !== FALSE
+    && !preg_match('![/?#]!', substr($path, 0, $colonpos))
+    && filter_xss_bad_protocol($path, FALSE) == check_plain($path));
+}
+
+/**
+ * Processes an HTML attribute value and ensures it does not contain an URL
+ * with a disallowed protocol (e.g. javascript:)
+ *
+ * May be used early in bootstrap.
+ *
+ * @param $string
+ *   The string with the attribute value.
+ * @param $decode
+ *   Whether to decode entities in the $string. Set to FALSE if the $string
+ *   is in plain text, TRUE otherwise. Defaults to TRUE.
+ * @return
+ *   Cleaned up and HTML-escaped version of $string.
+ */
+function filter_xss_bad_protocol($string, $decode = TRUE) {
+  static $allowed_protocols;
+  if (!isset($allowed_protocols)) {
+    $allowed_protocols = array_flip(variable_get('filter_allowed_protocols', array('http', 'https', 'ftp', 'news', 'nntp', 'tel', 'telnet', 'mailto', 'irc', 'ssh', 'sftp', 'webcal', 'rtsp')));
+  }
+
+  // Get the plain text representation of the attribute value (i.e. its meaning).
+  if ($decode) {
+    $string = decode_entities($string);
+  }
+
+  // Iteratively remove any invalid protocol found.
+
+  do {
+    $before = $string;
+    $colonpos = strpos($string, ':');
+    if ($colonpos > 0) {
+      // We found a colon, possibly a protocol. Verify.
+      $protocol = substr($string, 0, $colonpos);
+      // If a colon is preceded by a slash, question mark or hash, it cannot
+      // possibly be part of the URL scheme. This must be a relative URL,
+      // which inherits the (safe) protocol of the base document.
+      if (preg_match('![/?#]!', $protocol)) {
+        break;
+      }
+      // Per RFC2616, section 3.2.3 (URI Comparison) scheme comparison must be case-insensitive
+      // Check if this is a disallowed protocol.
+      if (!isset($allowed_protocols[strtolower($protocol)])) {
+        $string = substr($string, $colonpos + 1);
+      }
+    }
+  } while ($before != $string);
+  return check_plain($string);
+}
+
+/**
  * Sanitizes unsafe keys from the request.
  */
 function _drupal_bootstrap_sanitize_request() {
@@ -1493,7 +1670,123 @@ function _drupal_bootstrap_sanitize_input(&$input, $whitelist = array()) {
         $sanitized_keys = array_merge($sanitized_keys, _drupal_bootstrap_sanitize_input($input[$key], $whitelist));
       }
     }
+    // PHP 5.x will leave the array pointer at the end without this.
+    reset($input);
   }
 
   return $sanitized_keys;
+}
+
+/**
+ * Removes the destination if it is dangerous.
+ *
+ * Note this can only be called after common.inc has been included.
+ *
+ * @return bool
+ *   TRUE if the destination has been removed from $_GET, FALSE if not.
+ */
+function _drupal_bootstrap_clean_destination() {
+  $dangerous_keys = array();
+
+  $parts = _drupal_parse_url($_GET['destination']);
+  if (!empty($parts['query'])) {
+    $whitelist = variable_get('sanitize_input_whitelist', array());
+    $log_sanitized_keys = variable_get('sanitize_input_logging', FALSE);
+
+    $dangerous_keys = _drupal_bootstrap_sanitize_input($parts['query'], $whitelist);
+    if (!empty($dangerous_keys)) {
+      // The destination is removed rather than sanitized to mirror the
+      // handling of external destinations.
+      unset($_GET['destination']);
+      unset($_REQUEST['destination']);
+      if ($log_sanitized_keys) {
+        trigger_error(sprintf('Potentially unsafe destination removed from query string parameters (GET) because it contained the following keys: %s', implode(', ', $dangerous_keys)));
+      }
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Backport of drupal_parse_url() from Drupal 7.
+ */
+function _drupal_parse_url($url) {
+  $options = array(
+    'path' => NULL,
+    'query' => array(),
+    'fragment' => '',
+  );
+
+  // External URLs: not using parse_url() here, so we do not have to rebuild
+  // the scheme, host, and path without having any use for it.
+  if (strpos($url, '://') !== FALSE) {
+
+    // Split off everything before the query string into 'path'.
+    $parts = explode('?', $url);
+    $options['path'] = $parts[0];
+
+    // If there is a query string, transform it into keyed query parameters.
+    if (isset($parts[1])) {
+      $query_parts = explode('#', $parts[1]);
+      parse_str($query_parts[0], $options['query']);
+
+      // Take over the fragment, if there is any.
+      if (isset($query_parts[1])) {
+        $options['fragment'] = $query_parts[1];
+      }
+    }
+  }
+  else {
+
+    // parse_url() does not support relative URLs, so make it absolute. E.g. the
+    // relative URL "foo/bar:1" isn't properly parsed.
+    $parts = parse_url('http://example.com/' . $url);
+
+    // Strip the leading slash that was just added.
+    $options['path'] = substr($parts['path'], 1);
+    if (isset($parts['query'])) {
+      parse_str($parts['query'], $options['query']);
+    }
+    if (isset($parts['fragment'])) {
+      $options['fragment'] = $parts['fragment'];
+    }
+  }
+
+  // The 'q' parameter contains the path of the current page if clean URLs are
+  // disabled. It overrides the 'path' of the URL when present, even if clean
+  // URLs are enabled, due to how Apache rewriting rules work. The path
+  // parameter must be a string.
+  if (isset($options['query']['q']) && is_string($options['query']['q'])) {
+    $options['path'] = $options['query']['q'];
+    unset($options['query']['q']);
+  }
+  return $options;
+}
+
+// Shim for ereg() family of functions for PHP 7+ where they don't exist.
+if (!function_exists('ereg')) {
+  function ereg($pattern, $subject, &$matches = array()) {
+    return preg_match('/' . $pattern . '/', $subject, $matches);
+  }
+
+  function eregi($pattern, $subject, &$matches = array()) {
+    return preg_match('/' . $pattern . '/i', $subject, $matches);
+  }
+
+  function ereg_replace($pattern, $replacement, $string) {
+    return preg_replace('/' . $pattern . '/', $replacement, $string);
+  }
+
+  function eregi_replace($pattern, $replacement, $string) {
+    return preg_replace('/' . $pattern . '/i', $replacement, $string);
+  }
+
+  function split($pattern, $subject, $limit = -1) {
+    return preg_split('/' . $pattern . '/', $subject, $limit);
+  }
+
+  function spliti($pattern, $subject, $limit = -1) {
+    return preg_split('/' . $pattern . '/i', $subject, $limit);
+  }
 }

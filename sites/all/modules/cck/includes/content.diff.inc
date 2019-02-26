@@ -1,5 +1,4 @@
 <?php
-// $Id: content.diff.inc,v 1.2.2.7 2010/06/09 01:13:08 karens Exp $
 
 /**
  * @file hook_diff() implementations for CCK (especially fields).
@@ -26,11 +25,11 @@ function content_diff($old_node, $new_node) {
       $function = function_exists($function) ? $function : 'content_content_diff_values';
       $old_values = array();
       $new_values = array();
-      if (isset($old_node->$field['field_name'])) {
-        $old_values = $function($old_node, $field, $old_node->$field['field_name']);
+      if (isset($old_node->{$field['field_name']})) {
+        $old_values = $function($old_node, $field, $old_node->{$field['field_name']});
       }
-      if (isset($new_node->$field['field_name'])) {
-        $new_values = $function($new_node, $field, $new_node->$field['field_name']);
+      if (isset($new_node->{$field['field_name']})) {
+        $new_values = $function($new_node, $field, $new_node->{$field['field_name']});
       }
       if ($old_values || $new_values) {
         $result[$field['field_name']] = array(

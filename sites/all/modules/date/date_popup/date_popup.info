@@ -3,11 +3,12 @@ name = Date Popup
 description = Enables jquery popup calendars and time entry widgets for selecting dates and times.
 dependencies[] = date_api
 dependencies[] = date_timezone
+dependencies[] = jquery_ui
 package = Date/Time
 core = 6.x
-; Information added by drupal.org packaging script on 2009-09-16
-version = "6.x-2.4"
+
+; Information added by Drupal 6 LTS vendors on 2018-12-22
+version = "6.x-2.11"
 core = "6.x"
 project = "date"
-datestamp = "1253103320"
-
+datestamp = "1545506687"

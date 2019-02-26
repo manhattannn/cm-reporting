@@ -2430,7 +2430,7 @@ function views_ui_config_item_extra_form(&$form_state) {
     $handler = views_get_handler($item['table'], $item['field'], $type);
     if (empty($handler)) {
       $form['markup'] = array('#value' => t("Error: handler for @table > @field doesn't exist!", array('@table' => $item['table'], '@field' => $item['field'])));
-      break;
+      return false;
     }
     else {
       $handler->init($view, $item);
@@ -2498,7 +2498,7 @@ function views_ui_change_style_form(&$form_state) {
     $handler = views_get_handler($item['table'], $item['field'], $type);
     if (empty($handler)) {
       $form['markup'] = array('#value' => t("Error: handler for @table > @field doesn't exist!", array('@table' => $item['table'], '@field' => $item['field'])));
-      break;
+      return false;
     }
     $handler->init($view, $item);
     $types = views_object_types();
@@ -2583,7 +2583,7 @@ function views_ui_config_style_form(&$form_state) {
     $handler = views_get_handler($item['table'], $item['field'], $type);
     if (empty($handler)) {
       $form['markup'] = array('#value' => t("Error: handler for @table > @field doesn't exist!", array('@table' => $item['table'], '@field' => $item['field'])));
-      break;
+      return false;
     }
     $handler->init($view, $item);
     $types = views_object_types();

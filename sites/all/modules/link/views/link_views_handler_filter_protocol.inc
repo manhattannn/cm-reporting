@@ -1,5 +1,4 @@
 <?php
-// $Id: link_views_handler_filter_protocol.inc,v 1.1.4.2 2009/07/04 19:07:42 jcfiala Exp $
 
 /**
  * @file
@@ -10,14 +9,16 @@
  * Filter handler for limiting a view to URLs of a certain protocol.
  */
 class link_views_handler_filter_protocol extends views_handler_filter_string {
+  
   /**
    * Set defaults for the filter options.
    */
-  function options(&$options) {
-    parent::options($options);
-    $options['operator'] = 'OR';
-    $options['value'] = 'http';
-    $options['case'] = 0;
+  function option_definition() {
+    $options = parent::option_definition();
+    $options['operator'] = array('default' => 'OR');
+    $options['value'] = array('default' => 'http');
+    $options['case'] = array('default' => 0);
+    return $options;
   }
 
   /**
@@ -86,16 +87,17 @@ class link_views_handler_filter_protocol extends views_handler_filter_string {
       // More complex case, no protocol specified but is automatically cleaned up
       // by link_cleanup_url(). RegEx is required for this search operation.
       if ($protocol == 'http') {
+        $link_domains = _link_domains();
         if ($db_type == 'pgsql') {
           // PostGreSQL code has NOT been tested. Please report any problems to the link issue queue.
           // pgSQL requires all slashes to be double escaped in regular expressions.
           // See http://www.postgresql.org/docs/8.1/static/functions-matching.html#FUNCTIONS-POSIX-REGEXP
-          $condition .= ' OR '. $field .' ~* \''.'^(([a-z0-9]([a-z0-9\\-_]*\\.)+)('. LINK_DOMAINS .'|[a-z][a-z]))'.'\'';
+          $condition .= ' OR '. $field .' ~* \''.'^(([a-z0-9]([a-z0-9\\-_]*\\.)+)('. $link_domains .'|[a-z][a-z]))'.'\'';
         }
         else {
           // mySQL requires backslashes to be double (triple?) escaped within character classes.
           // See http://dev.mysql.com/doc/refman/5.0/en/string-comparison-functions.html#operator_regexp
-          $condition .= ' OR '. $field .' REGEXP \''.'^(([a-z0-9]([a-z0-9\\\-_]*\.)+)('. LINK_DOMAINS .'|[a-z][a-z]))'.'\'';
+          $condition .= ' OR '. $field .' REGEXP \''.'^(([a-z0-9]([a-z0-9\\\-_]*\.)+)('. $link_domains .'|[a-z][a-z]))'.'\'';
         }
       }
 
@@ -103,5 +105,30 @@ class link_views_handler_filter_protocol extends views_handler_filter_string {
     }
 
     $this->query->add_where($this->options['group'], implode(' '. $this->operator .' ', $where_conditions));
+  }
+  
+  /**
+   * Because more than one can be selected, we need to handle the value better.
+   */
+  function admin_summary() {
+    if (!empty($this->options['exposed'])) {
+      return t('exposed');
+    }
+
+    $options = $this->operator_options('short');
+    $output = check_plain($options[$this->operator]);
+    if (in_array($this->operator, $this->operator_values(1))) {
+      $count = 0;
+      foreach ($this->value as $value) {
+        if (!$count) {
+          $output .= ' ' . check_plain($value);
+        }
+        else {
+          $output .= ', ' . check_plain($value);
+        }
+        $count++;
+      }
+    }
+    return $output;
   }
 }
